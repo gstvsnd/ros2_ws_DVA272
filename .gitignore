@@ -1,0 +1,5 @@
+# Ignorera följande mappar:
+log/
+install/
+build/
+.vscode/
