@@ -3,13 +3,13 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, TimerAction
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch.actions import IncludeLaunchDescription, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
-from launch.event_handlers import OnProcessExit
+from launch.event_handlers import OnProcessExit, OnShutdown
 from launch.utilities import perform_substitutions
 
 
@@ -37,18 +37,18 @@ def generate_launch_description():
 
     # --- Launch Configurations ---
     ld = LaunchDescription()
-    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
-    enable_rviz = LaunchConfiguration('enable_rviz', default='true')
+    use_sim_time = LaunchConfiguration('use_sim_time', default='True')
+    enable_rviz = LaunchConfiguration('enable_rviz', default='True')
     rviz_config_file = LaunchConfiguration('rviz_config_file', default=default_rviz_config)
     params_file = LaunchConfiguration('nav_params_file', default=default_nav_params)
-    use_simulator = LaunchConfiguration('use_simulator')
-    headless = LaunchConfiguration('headless')
+    use_simulator = LaunchConfiguration('use_simulator', default='True')
+    headless = LaunchConfiguration('headless', default='False')
     # --- Launch Arguments Declarations ---
     declare_use_sim_time_arg = DeclareLaunchArgument(
-        name='use_sim_time', default_value='true', description='Use simulator time'
+        name='use_sim_time', default_value='True', description='Use simulator time'
     )
     declare_enable_rviz_arg = DeclareLaunchArgument(
-        name='enable_rviz', default_value='true', description='Enable rviz launch'
+        name='enable_rviz', default_value='True', description='Enable rviz launch'
     )
     declare_rviz_config_file_arg = DeclareLaunchArgument(
         'rviz_config_file', default_value=default_rviz_config,
@@ -63,23 +63,27 @@ def generate_launch_description():
         default_value='True',
         description='Whether to start the simulator')
     
-    declare_simulator_cmd = DeclareLaunchArgument(
+    declare_headless_cmd = DeclareLaunchArgument(
         'headless',
-        default_value='False', # ----- Sätt till False för att köra, True för att INTE köra
-        description='Whether to execute gzclient)')
+        default_value='False',
+        description='Whether to execute gzclient)'
+    )
     # --- Nodes and Launch Includes ---
     # Gazebo
     start_gazebo_server_cmd = ExecuteProcess(
         condition=IfCondition(use_simulator),
         cmd=['gzserver', '-s', 'libgazebo_ros_init.so',
              '-s', 'libgazebo_ros_factory.so', world_file],
-        cwd=[os.path.join(bringup_dir, 'launch')], output='screen')
+        cwd=[os.path.join(bringup_dir, 'launch')], output='screen',
+        sigterm_timeout='5'
+    )
 
     start_gazebo_client_cmd = ExecuteProcess(
-        condition=IfCondition(PythonExpression(
-            [use_simulator, ' and not ', headless])),
+        condition=IfCondition(PythonExpression([use_simulator, ' and not ', headless])),
         cmd=['gzclient'],
-        cwd=[os.path.join(bringup_dir, 'launch')], output='screen')
+        cwd=[os.path.join(bringup_dir, 'launch')], output='screen',
+        sigterm_timeout='5'
+    )
 
     # Common Remappings
     remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
@@ -126,6 +130,7 @@ def generate_launch_description():
             '-unpause',
         ],
         output='screen',
+        condition=IfCondition(use_simulator)
     )
 
     # Navigation2 Bringup
@@ -138,7 +143,7 @@ def generate_launch_description():
             'map_server': 'False', # Don't run internal map server
             'params_file': params_file,
             'default_bt_xml_filename': default_bt_xml,
-            'autostart': 'true',
+            'autostart': 'True',
             'use_sim_time': use_sim_time,
             'log_level': 'warn'
         }.items()
@@ -167,12 +172,39 @@ def generate_launch_description():
     )
 
     # --- Event Handlers ---
-    # Set initial pose and start RViz after spawning
-    post_spawn_event = RegisterEventHandler(
+    actions_on_spawn_exit = [
+        robot_state_publisher_node,
+        nav2_bringup_cmd,
+        initial_pose_cmd,
+    ]
+
+    register_core_on_spawn_exit = RegisterEventHandler(
         event_handler=OnProcessExit(
             target_action=spawn_robot_node,
-            on_exit=[initial_pose_cmd, rviz_cmd],
-        )
+            on_exit=actions_on_spawn_exit
+        ),
+        condition=IfCondition(use_simulator)
+    )
+
+    rviz_timer = TimerAction(
+        period=5.0,
+        actions=[rviz_cmd]
+    )
+
+    register_rviz_headless_on_spawn_exit = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=spawn_robot_node,
+            on_exit=[rviz_cmd]
+        ),
+        condition=IfCondition(PythonExpression([use_simulator, ' and ', headless, ' and ', enable_rviz]))
+    )
+
+    register_rviz_timer_on_spawn_exit = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=spawn_robot_node,
+            on_exit=[rviz_timer]
+        ),
+        condition=IfCondition(PythonExpression([use_simulator, ' and not ', headless, ' and ', enable_rviz]))
     )
 
     # Launching Obstacle detection Launcher
@@ -188,7 +220,7 @@ def generate_launch_description():
     ld.add_action(declare_rviz_config_file_arg)
     ld.add_action(declare_params_file_arg)
     ld.add_action(declare_use_simulator_cmd)
-    ld.add_action(declare_simulator_cmd)
+    ld.add_action(declare_headless_cmd)
 
     ld.add_action(start_gazebo_server_cmd)
     ld.add_action(start_gazebo_client_cmd)
@@ -196,11 +228,11 @@ def generate_launch_description():
     ld.add_action(map_server_node)
     ld.add_action(map_server_lifecycle_node)
 
-    ld.add_action(robot_state_publisher_node)
     ld.add_action(spawn_robot_node)
-    ld.add_action(nav2_bringup_cmd)
-
-    ld.add_action(post_spawn_event)
+    
+    ld.add_action(register_core_on_spawn_exit)
+    ld.add_action(register_rviz_headless_on_spawn_exit)
+    ld.add_action(register_rviz_timer_on_spawn_exit)
     ld.add_action(obstacle_detection_launch_file)
 
     return ld
