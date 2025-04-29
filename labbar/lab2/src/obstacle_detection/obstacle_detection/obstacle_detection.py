@@ -162,7 +162,7 @@ class ObstacleDetection(Node):
             self.tele_twist.linear.x = 0.0
             self.tele_twist.angular.z = 0.0
         else:
-            self.tele_twist.linear.x = self.speed # Fullt ös!
+            self.tele_twist.linear.x = self.speed
             self.tele_twist.angular.z = self.P * e_theta
 
     def destroy_node(self):
