@@ -19,7 +19,13 @@ class ObstacleDetection(Node):
     Simple obstacle detection node that stops the robot when obstacles are too close.
     Uses a circular detection zone around the robot.
     
-    TODO: Implement the detect_obstacle method to avoid obstacles!
+    # # # # # # # # # # # # # # # # # # #
+    #  Lab2_2                           #
+    #  Authors:                         #
+    #  Samuel Källstad & Gustav Sand    #
+    #                                   #
+    # # # # # # # # # # # # # # # # # # #
+    
     """
     def __init__(self):
         super().__init__("obstacle_detection")
@@ -44,8 +50,8 @@ class ObstacleDetection(Node):
         self.P = 0.9
 
         # Goal - Hårdkodat - tas bort vid senare tillfälle
-        self.goal_x = 2.0
-        self.goal_y = 0.5
+        self.goal_x = 1.6
+        self.goal_y = 0.6
         self.goal_reached = False
 
         # Robotens riktning
@@ -107,7 +113,7 @@ class ObstacleDetection(Node):
         if obstacle_distance < self.stop_distance:
             # hitta vinkeln till närmsta hinder
             obstacle_direction = (self.scan_ranges).index(obstacle_distance)
-            if obstacle_direction > 180: #
+            if obstacle_direction > 180:
                 obstacle_direction -= 360 # normerar
 
             self.get_logger().info(f"Hinder-mot robot (grader): {obstacle_direction}") # det är mer intuitivt att se än radianer
@@ -116,25 +122,25 @@ class ObstacleDetection(Node):
             theta_obstacle = (obstacle_direction) + self.yaw #summera
             theta_obstacle = (theta_obstacle + math.pi) % (2 * math.pi) - math.pi #normera
 
-            # Bestämm snabbaste omväg & Navigera
-            if abs(obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret stannar den och riktar up sig.
-
-                if theta_gtg > theta_obstacle:
-                    self.get_logger().info(f"STYR VÄNSTER")
-                    e_theta = theta_obstacle - self.yaw + (math.pi / 2)
-                else:
-                    self.get_logger().info(f"STYR HÖGER")
-                    e_theta = theta_obstacle - self.yaw - (math.pi / 2)
-
-                e_theta = math.atan2(math.sin(e_theta), math.cos(e_theta)) # ;)
-
-                # Anpassa fart och riktning:
-                self.tele_twist.linear.x = self.speed * abs(math.cos(e_theta)) - abs(math.sin(e_theta) * obstacle_distance / 10) 
-                # [0,1) - bromsar mer ju mer roboten behöver veja | e_theta - vinkel mot önskad riktning | backar lite om den kommer för nära
-                
-                self.tele_twist.angular.z = self.P * e_theta
+            # Bestämm snabbaste omväg
+            if theta_gtg > theta_obstacle: # behöver man använda theta_gtg?
+                self.get_logger().info(f"FARA HÖGER")
+                new_theta = theta_obstacle - self.yaw + (math.pi / 2)
             else:
-                self.go_to_goal()
+                self.get_logger().info(f"FARA VÄNSTER")
+                new_theta = theta_obstacle - self.yaw - (math.pi / 2)
+
+            new_theta = math.atan2(math.sin(new_theta), math.cos(new_theta)) # ;)
+
+            # Bromsa och Navigera
+            if abs(obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret stannar den och riktar up sig.
+                self.tele_twist.angular.z = self.P * new_theta
+                # Anpassa fart och riktning:
+                if obstacle_distance < (self.stop_distance / 2):
+                    self.tele_twist.linear.x = -self.speed
+                else:
+                    self.tele_twist.linear.x = self.speed * abs(math.cos(new_theta))
+                    # [0,1) - bromsar mer ju mer roboten behöver veja | e_theta - vinkel mot önskad riktning
         else:
             self.go_to_goal() # gå mot målet
 
