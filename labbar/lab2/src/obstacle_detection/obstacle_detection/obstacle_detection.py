@@ -46,8 +46,8 @@ class ObstacleDetection(Node):
         self.tele_twist.angular.z = 0.0 # max enligt min magkänsla är 1.82
 
         # Hastigheter
-        self.speed = 0.18
-        self.P = 0.9
+        self.speed = 0.15
+        self.P = 0.90
 
         # Goal - Hårdkodat - tas bort vid senare tillfälle
         self.goal_x = 1.6
@@ -116,32 +116,50 @@ class ObstacleDetection(Node):
             if obstacle_direction > 180:
                 obstacle_direction -= 360 # normerar
 
-            self.get_logger().info(f"Hinder-mot robot (grader): {obstacle_direction}") # det är mer intuitivt att se än radianer
+            #self.get_logger().info(f"Hinder-mot robot (grader): {obstacle_direction}") # det är mer intuitivt att se än radianer
             obstacle_direction = obstacle_direction * math.pi / 180 # omvandlar till radianer
             theta_gtg = math.atan2((self.goal_y - self.pose.position.y), (self.goal_x - self.pose.position.x))
             theta_obstacle = (obstacle_direction) + self.yaw #summera
             theta_obstacle = (theta_obstacle + math.pi) % (2 * math.pi) - math.pi #normera
 
-            # Bestämm snabbaste omväg
-            if theta_gtg > theta_obstacle: # behöver man använda theta_gtg?
-                self.get_logger().info(f"FARA HÖGER")
-                new_theta = theta_obstacle - self.yaw + (math.pi / 2)
-            else:
-                self.get_logger().info(f"FARA VÄNSTER")
-                new_theta = theta_obstacle - self.yaw - (math.pi / 2)
+            #self.get_logger().info(f"yaw: {self.yaw * 180 / math.pi}")
+            #self.get_logger().info(f"theta_obstacle: {theta_obstacle * 180 / math.pi}")
+            #self.get_logger().info(f"theta_gtg: {theta_gtg * 180 / math.pi}")
 
-            new_theta = math.atan2(math.sin(new_theta), math.cos(new_theta)) # ;)
+
+            
 
             # Bromsa och Navigera
-            if abs(obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret stannar den och riktar up sig.
-                self.tele_twist.angular.z = self.P * new_theta
-                # Anpassa fart och riktning:
-                if obstacle_distance < (self.stop_distance / 2):
-                    self.tele_twist.linear.x = -self.speed
-                    self.tele_twist.angular.z = -self.P * new_theta
+            if abs(obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret
+                # Tveksamhetstal:
+                beslutsångest = math.pi / 8
+                delta = ((theta_gtg - theta_obstacle) + math.pi) % (2 * math.pi) - math.pi
+                if abs(delta) < beslutsångest:
+                    # Hinder rakt i vägen :( tar samma håll som vanligt :)
+                    self.get_logger().info("aktar mig :(")
+                    if self.gammla_vejen == 'right':
+                        new_theta = theta_obstacle - self.yaw - (math.pi / 2)
+                    else:
+                        new_theta = theta_obstacle - self.yaw + (math.pi / 2)
                 else:
-                    self.tele_twist.linear.x = self.speed * abs(math.cos(new_theta))
-                    # [0,1) - bromsar mer ju mer roboten behöver veja | e_theta - vinkel mot önskad riktning
+                    # Bestämm snabbaste omväg
+                    if delta > 0:
+                        self.get_logger().info("Vejar vänster")
+                        new_theta = theta_obstacle - self.yaw + (math.pi / 2)
+                        self.gammla_vejen = 'left'
+                    else:
+                        self.get_logger().info("Vejar höger")
+                        new_theta = theta_obstacle - self.yaw - (math.pi / 2)
+                        self.gammla_vejen = 'right'
+
+                new_theta = math.atan2(math.sin(new_theta), math.cos(new_theta)) # ;)
+
+                # Anpassa fart och riktning:
+                self.tele_twist.angular.z = self.P * new_theta
+                self.tele_twist.linear.x = self.speed * (obstacle_distance / self.stop_distance) * abs(math.cos(new_theta))
+            else:
+                self.get_logger().info(f"Åker mot mål")
+                self.go_to_goal() # gå mot målet
         else:
             self.go_to_goal() # gå mot målet
 

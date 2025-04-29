@@ -6,12 +6,12 @@
 
 0. **Terminal 1: Build**
    ```
+   cd ~/workspace
    colcon build --symlink-install
    ```
 
 1. **Terminal 1: Launch the Main Simulation**
    ```
-   cd ~/workspace
    source install/setup.bash
    ros2 launch bringup main.launch.py
    ```
