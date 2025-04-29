@@ -138,6 +138,7 @@ class ObstacleDetection(Node):
                 # Anpassa fart och riktning:
                 if obstacle_distance < (self.stop_distance / 2):
                     self.tele_twist.linear.x = -self.speed
+                    self.tele_twist.angular.z = -self.P * new_theta
                 else:
                     self.tele_twist.linear.x = self.speed * abs(math.cos(new_theta))
                     # [0,1) - bromsar mer ju mer roboten behöver veja | e_theta - vinkel mot önskad riktning
