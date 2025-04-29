@@ -10,7 +10,6 @@ import time
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose
 from tf_transformations import euler_from_quaternion
-#test branch lab2_3
 time.sleep(15) # väntar en snabbis innan den kör
 start_time = time.time()
 
@@ -19,7 +18,13 @@ class ObstacleDetection(Node):
     Simple obstacle detection node that stops the robot when obstacles are too close.
     Uses a circular detection zone around the robot.
     
-    TODO: Implement the detect_obstacle method to avoid obstacles!
+    # # # # # # # # # # # # # # # # # # #
+    #  Lab2_3                           #
+    #  Authors:                         #
+    #  Samuel Källstad & Gustav Sand    #
+    #                                   #
+    # # # # # # # # # # # # # # # # # # #
+    
     """
     def __init__(self):
         super().__init__("obstacle_detection")
