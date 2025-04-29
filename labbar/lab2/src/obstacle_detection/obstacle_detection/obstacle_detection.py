@@ -11,7 +11,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose
 from tf_transformations import euler_from_quaternion
 
-time.sleep(12) # väntar en snabbis innan den kör
+time.sleep(15) # väntar en snabbis innan den kör
 start_time = time.time()
 
 class ObstacleDetection(Node):
@@ -40,12 +40,12 @@ class ObstacleDetection(Node):
         self.tele_twist.angular.z = 0.0 # max enligt min magkänsla är 1.82
 
         # Hastigheter
-        self.speed = 0.15
-        self.P = 1.0
+        self.speed = 0.18
+        self.P = 0.9
 
         # Goal - Hårdkodat - tas bort vid senare tillfälle
-        self.goal_x = 1.9
-        self.goal_y = 0.6
+        self.goal_x = 2.0
+        self.goal_y = 0.5
         self.goal_reached = False
 
         # Robotens riktning
@@ -95,7 +95,7 @@ class ObstacleDetection(Node):
         else:
             self.get_logger().info(f"(x, y) = ({self.pose.position.x}, {self.pose.position.y})")
             self.get_logger().info(f"Goal reached in {round((time.time() - start_time), 1)} seconds!")
-            time.sleep(5)
+            time.sleep(10)
             self.destroy_node()
         self.cmd_vel_pub.publish(self.tele_twist) # Publicerar till robot
 
@@ -112,14 +112,12 @@ class ObstacleDetection(Node):
 
             self.get_logger().info(f"Hinder-mot robot (grader): {obstacle_direction}") # det är mer intuitivt att se än radianer
             obstacle_direction = obstacle_direction * math.pi / 180 # omvandlar till radianer
-            theta_gtg = math.atan2((self.goal_x - self.pose.position.x), (self.goal_y - self.pose.position.y))
+            theta_gtg = math.atan2((self.goal_y - self.pose.position.y), (self.goal_x - self.pose.position.x))
             theta_obstacle = (obstacle_direction) + self.yaw #summera
             theta_obstacle = (theta_obstacle + math.pi) % (2 * math.pi) - math.pi #normera
 
             # Bestämm snabbaste omväg & Navigera
             if abs(obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret stannar den och riktar up sig.
-                self.get_logger().info(f"HINDER")
-
 
                 if theta_gtg > theta_obstacle:
                     self.get_logger().info(f"STYR VÄNSTER")
@@ -129,13 +127,14 @@ class ObstacleDetection(Node):
                     e_theta = theta_obstacle - self.yaw - (math.pi / 2)
 
                 e_theta = math.atan2(math.sin(e_theta), math.cos(e_theta)) # ;)
-                self.get_logger().info(f"P * e_theta: {self.tele_twist.angular.z}") #Används för att svänga bort från hinder
 
                 # Anpassa fart och riktning:
-                self.tele_twist.linear.x = self.speed * abs(math.cos(e_theta)) # [0,1) - bromsar mer ju mer roboten behöver veja
-                self.tele_twist.angular.z = self.P * e_theta * 1.1
+                self.tele_twist.linear.x = self.speed * abs(math.cos(e_theta)) - abs(math.sin(e_theta) * obstacle_distance / 10) 
+                # [0,1) - bromsar mer ju mer roboten behöver veja | e_theta - vinkel mot önskad riktning | backar lite om den kommer för nära
+                
+                self.tele_twist.angular.z = self.P * e_theta
             else:
-                self.go_to_goal() # gå mot målet
+                self.go_to_goal()
         else:
             self.go_to_goal() # gå mot målet
 
@@ -158,62 +157,7 @@ class ObstacleDetection(Node):
             self.tele_twist.angular.z = 0.0
         else:
             self.tele_twist.linear.x = self.speed # Fullt ös!
-            self.tele_twist.angular.z = self.P * e_theta * 0.9
-
-
-
-        """
-        TODO: Implement obstacle detection and avoidance!
-        
-        MAIN TASK:
-        - Detect if any obstacle is too close to the robot (closer than self.stop_distance) -ok
-        - Turn if obstacle is close -ok
-        
-        UNDERSTANDING LASER SCAN DATA:
-        - self.scan_ranges contains distances to obstacles in meters -ok
-        - Each value represents distance at a different angle around the robot -ok
-        - Values less than self.stop_distance indicate a close obstacle -ok
-        
-        UNDERSTANDING POSE (Pose message)
-        - self.pose.position.x: x position of the robot -ok
-        - self.pose.position.y: y position of the robot -ok
-        - yaw: heading of the robot, converted from quaternions for your convinence (in radians) -ok
-
-        CREATE CONTROL SIGNAL FOR ANGULAR VELOCITY
-        - Compare angle to goal or obstacle with the current angle of the robot, i.e -ok
-        - e_theta = (gtg-yaw) -ok
-        - make sure it wraps between pi and -pi
-        - e_theta = atan2(sin(e_theta), cos(e_theta)) -ok (köper det)
-        - twist.angular.z = P * e_theta
-        - Choose P
-
-
-        CONTROLLING THE ROBOT (Twist message):
-        - twist.linear.x: Forward/backward (positive = forward, negative = backward)
-        - twist.angular.z: Rotation (positive = left, negative = right)
-        - To stop: set twist.linear.x = 0.0 (you can keep angular.z to allow turning)
-        """
-
-        # Filter out invalid readings (very small values, infinity, or NaN)
-        valid_ranges = [r for r in self.scan_ranges if not math.isinf(r) and not math.isnan(r) and r > 0.01]
-        
-        # If no valid readings, assume no obstacles
-        if not valid_ranges:
-            self.cmd_vel_pub.publish(self.tele_twist)
-            return
-            
-        # Find the closest obstacle in any direction (full 360° scan)
-        obstacle_distance = min(valid_ranges)
-
-        # TODO: Implement your obstacle detection logic here!
-        # Remember to use obstacle_distance and self.stop_distance in your implementation.
-        # Remember to find the angle of the closest obstacle
-
-        # For now, just use the teleop command (unsafe - replace with your code)
-        twist = self.tele_twist
-
-        # Publish the velocity command
-        self.cmd_vel_pub.publish(twist)
+            self.tele_twist.angular.z = self.P * e_theta
 
     def destroy_node(self):
         """Publish zero velocity when node is destroyed"""
@@ -223,7 +167,7 @@ class ObstacleDetection(Node):
         super().destroy_node() # Call the parent class's destroy_node
 
 
-def main(args=None):#
+def main(args=None): # Hur fungerar main?
     rclpy.init(args=args)
     obstacle_detection = ObstacleDetection()
     try:
