@@ -46,13 +46,14 @@ class ObstacleDetection(Node):
         self.tele_twist.angular.z = 0.0 # max enligt min magkänsla är 1.82
 
         # Hastigheter
-        self.speed = 0.15
-        self.P = 0.90
+        self.speed = 0.25
+        self.P = 0.9
 
         # Goal - Hårdkodat - tas bort vid senare tillfälle
         self.goal_x = 1.6
         self.goal_y = 0.6
         self.goal_reached = False
+        self.gammla_vejen = 'NULL'
 
         # Robotens riktning
         self.yaw = 0.0 # initiering (Problem?)
@@ -101,6 +102,7 @@ class ObstacleDetection(Node):
         else:
             self.get_logger().info(f"(x, y) = ({self.pose.position.x}, {self.pose.position.y})")
             self.get_logger().info(f"Goal reached in {round((time.time() - start_time), 1)} seconds!")
+            self.get_logger().info(f":)")
             time.sleep(10)
             self.destroy_node()
         self.cmd_vel_pub.publish(self.tele_twist) # Publicerar till robot
@@ -108,60 +110,60 @@ class ObstacleDetection(Node):
     def detect_obstacle(self):
         """Obstacle Avoidance"""
         # hitta avstånt till främsta hinder
-        obstacle_distance = min(self.scan_ranges) 
+        self.obstacle_distance = min(self.scan_ranges) 
 
-        if obstacle_distance < self.stop_distance:
-            # hitta vinkeln till närmsta hinder
-            obstacle_direction = (self.scan_ranges).index(obstacle_distance)
-            if obstacle_direction > 180:
-                obstacle_direction -= 360 # normerar
+        # hitta vinkeln till närmsta hinder
+        self.obstacle_direction = (self.scan_ranges).index(self.obstacle_distance)
+        if self.obstacle_direction > 180:
+            self.obstacle_direction -= 360 # normerar
 
-            #self.get_logger().info(f"Hinder-mot robot (grader): {obstacle_direction}") # det är mer intuitivt att se än radianer
-            obstacle_direction = obstacle_direction * math.pi / 180 # omvandlar till radianer
-            theta_gtg = math.atan2((self.goal_y - self.pose.position.y), (self.goal_x - self.pose.position.x))
-            theta_obstacle = (obstacle_direction) + self.yaw #summera
-            theta_obstacle = (theta_obstacle + math.pi) % (2 * math.pi) - math.pi #normera
+        self.obstacle_direction = self.obstacle_direction * math.pi / 180 # omvandlar till radianer
+        self.theta_gtg = math.atan2((self.goal_y - self.pose.position.y), (self.goal_x - self.pose.position.x))
+        self.theta_obstacle = (self.obstacle_direction) + self.yaw #summera
+        self.theta_obstacle = (self.theta_obstacle + math.pi) % (2 * math.pi) - math.pi #normera
 
-            #self.get_logger().info(f"yaw: {self.yaw * 180 / math.pi}")
-            #self.get_logger().info(f"theta_obstacle: {theta_obstacle * 180 / math.pi}")
-            #self.get_logger().info(f"theta_gtg: {theta_gtg * 180 / math.pi}")
-
-
-            
-
+        if self.obstacle_distance < self.stop_distance:
             # Bromsa och Navigera
-            if abs(obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret
-                # Tveksamhetstal:
-                beslutsångest = math.pi / 8
-                delta = ((theta_gtg - theta_obstacle) + math.pi) % (2 * math.pi) - math.pi
-                if abs(delta) < beslutsångest:
-                    # Hinder rakt i vägen :( tar samma håll som vanligt :)
-                    self.get_logger().info("aktar mig :(")
-                    if self.gammla_vejen == 'right':
-                        new_theta = theta_obstacle - self.yaw - (math.pi / 2)
-                    else:
-                        new_theta = theta_obstacle - self.yaw + (math.pi / 2)
-                else:
-                    # Bestämm snabbaste omväg
-                    if delta > 0:
-                        self.get_logger().info("Vejar vänster")
-                        new_theta = theta_obstacle - self.yaw + (math.pi / 2)
-                        self.gammla_vejen = 'left'
-                    else:
-                        self.get_logger().info("Vejar höger")
-                        new_theta = theta_obstacle - self.yaw - (math.pi / 2)
-                        self.gammla_vejen = 'right'
-
-                new_theta = math.atan2(math.sin(new_theta), math.cos(new_theta)) # ;)
+            if abs(self.obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret
+                # välj riktning
+                self.pic_direction()
 
                 # Anpassa fart och riktning:
-                self.tele_twist.angular.z = self.P * new_theta
-                self.tele_twist.linear.x = self.speed * (obstacle_distance / self.stop_distance) * abs(math.cos(new_theta))
+                self.tele_twist.angular.z = self.P * self.new_theta
+                self.tele_twist.linear.x = self.speed * (self.obstacle_distance / self.stop_distance) * abs(math.cos(self.new_theta))
             else:
                 self.get_logger().info(f"Åker mot mål")
                 self.go_to_goal() # gå mot målet
         else:
             self.go_to_goal() # gå mot målet
+        
+    def pic_direction(self):
+        # Tveksamhetstal:
+        beslutsångest = math.pi / 8
+        delta = ((self.theta_gtg - self.theta_obstacle) + math.pi) % (2 * math.pi) - math.pi
+        if abs(delta) < beslutsångest:
+            # Hinder rakt i vägen :( tar samma håll som vanligt :)
+            self.get_logger().info("aktar mig :(")
+            # Om han har beslutsångest igen
+            if self.gammla_vejen == 'NULL':
+                self.gammla_vejen = 'left'
+            # Väljer gamla riktningen
+            if self.gammla_vejen == 'right':
+                self.new_theta = self.theta_obstacle - self.yaw - (math.pi / 2)
+            else:
+                self.new_theta = self.theta_obstacle - self.yaw + (math.pi / 2)
+        else:
+            # Bestämm snabbaste omväg
+            if delta > 0:
+                self.get_logger().info("Vejar vänster")
+                self.new_theta = self.theta_obstacle - self.yaw + (math.pi / 2)
+                self.gammla_vejen = 'left'
+            else:
+                self.get_logger().info("Vejar höger")
+                self.new_theta = self.theta_obstacle - self.yaw - (math.pi / 2)
+                self.gammla_vejen = 'right'
+
+        self.new_theta = math.atan2(math.sin(self.new_theta), math.cos(self.new_theta)) # ;)
 
     def go_to_goal(self):
         """Navigating towards Goal"""
@@ -170,6 +172,14 @@ class ObstacleDetection(Node):
         goal_threashhold = 0.1
 
         #Riktning
+        clearance = min(self.scan_ranges)
+        if clearance > 0.5:
+            clearance = 0.5
+        vikt = clearance / 0.5 # lidar mäter 0.5m =>
+        if vikt > 0:
+            # välj riktning
+            self.pic_direction()
+
         theta_gtg = math.atan2((self.goal_y - self.pose.position.y), (self.goal_x - self.pose.position.x)) #koorddinatsystemet är tvärtom
         e_theta = theta_gtg - self.yaw
         e_theta = math.atan2(math.sin(e_theta), math.cos(e_theta)) # ;)
@@ -182,7 +192,8 @@ class ObstacleDetection(Node):
             self.tele_twist.angular.z = 0.0
         else:
             self.tele_twist.linear.x = self.speed
-            self.tele_twist.angular.z = self.P * e_theta
+            self.tele_twist.angular.z = self.P * e_theta # Lab2_2
+            #self.tele_twist.angular.z = self.P * ((e_theta * vikt) + (self.new_theta * (1 - vikt))) # Lab2_3
 
     def destroy_node(self):
         """Publish zero velocity when node is destroyed"""
