@@ -50,8 +50,8 @@ class ObstacleDetection(Node):
         self.P = 0.9
 
         # Goal - Hårdkodat - tas bort vid senare tillfälle
-        self.goal_x = 1.6
         self.goal_y = 0.6
+        self.goal_x = 1.6
         self.goal_reached = False
         self.gammla_vejen = 'NULL'
 
@@ -172,10 +172,12 @@ class ObstacleDetection(Node):
         goal_threashhold = 0.1
 
         #Riktning
-        clearance = min(self.scan_ranges)
-        if clearance > 0.5:
-            clearance = 0.5
-        vikt = clearance / 0.5 # lidar mäter 0.5m =>
+        clearance = min(self.scan_ranges) - self.stop_distance
+        if clearance > (0.5 - self.stop_distance):
+            clearance = (0.5 - self.stop_distance)
+        elif clearance < 0: 
+            clearance = 0
+        vikt = clearance / (0.5 - self.stop_distance) # lidar mäter max 0.5m (i dethär fallet)
         if vikt > 0:
             # välj riktning
             self.pic_direction()
@@ -192,8 +194,8 @@ class ObstacleDetection(Node):
             self.tele_twist.angular.z = 0.0
         else:
             self.tele_twist.linear.x = self.speed
-            self.tele_twist.angular.z = self.P * e_theta # Lab2_2
-            #self.tele_twist.angular.z = self.P * ((e_theta * vikt) + (self.new_theta * (1 - vikt))) # Lab2_3
+            #self.tele_twist.angular.z = self.P * e_theta # Lab2_2
+            self.tele_twist.angular.z = self.P * ((e_theta * vikt) + (self.new_theta * (1 - vikt))) # Lab2_3
 
     def destroy_node(self):
         """Publish zero velocity when node is destroyed"""
