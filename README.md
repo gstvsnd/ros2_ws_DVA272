@@ -3,23 +3,23 @@
  ├── 📁 labbar/
  │   ├── 📁 lab1_1/
  |   │    ├── 📁 src/
- │        |     └── 📁 magic ;) 
+ │   │    |     └── 📁 magic/
  |   │    └── 📄 README.md
  │   ├── 📁 lab1_2/
  |   │    ├── 📁 src/
- │        |     └── 📁 magic ;) 
+ │   │    |     └── 📁 magic/
  |   │    └── 📄 README.md
  │   ├── 📁 lab1_3/
  |   │    ├── 📁 src/
- │        |     └── 📁 magic ;) 
+ │   │    |     └── 📁 magic/
  |   │    └── 📄 README.md
  │   ├── 📁 lab2/
  |   │    ├── 📁 src/
- │        |     └── 📁 magic ;) 
+ │   │    |     └── 📁 magic/
  |   │    └── 📄 README.md
  │   └── 📁 lab3/
  |        ├── 📁 src/
- │        |     └── 📁 magic ;) 
+ │        |     └── 📁 "to be continued"
  |        └── 📄 README.md
  ├── 📄 README.md
  └── 📄 .gitignore
