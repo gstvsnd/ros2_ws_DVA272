@@ -55,6 +55,9 @@ class ObstacleDetection(Node):
         self.goal_reached = False
         self.gammla_vejen = 'NULL'
 
+        # För labb 3
+        self.backa_distance = 0.1 # Innom detta avstånt skall robot backa tills utanför self stop distance
+
         # Robotens riktning
         self.yaw = 0.0 # initiering (Problem?)
 
@@ -122,7 +125,16 @@ class ObstacleDetection(Node):
         self.theta_obstacle = (self.obstacle_direction) + self.yaw #summera
         self.theta_obstacle = (self.theta_obstacle + math.pi) % (2 * math.pi) - math.pi #normera
 
-        if self.obstacle_distance < self.stop_distance:
+        # Kollar om vi behöver backa enligt spec i lab 3
+        if self.obstacle_distance > self.stop_distance:
+            backa = 'False'
+        elif self.obstacle_distance < self.backa_distance:
+            backa = 'True'
+
+        if backa == 'True':
+            self.tele_twist.linear.x = -self.speed
+            self.tele_twist.angular.z = 0
+        elif self.obstacle_distance < self.stop_distance:
             # Bromsa och Navigera
             if abs(self.obstacle_direction) < (math.pi / 2): # Om roboten kollar mot hindret
                 # välj riktning
